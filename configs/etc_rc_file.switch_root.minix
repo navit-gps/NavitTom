@@ -102,7 +102,7 @@ mount_storage() {
 	ln -sf fb /dev/fb0 >/dev/null 2>&1
 
 	get_partitions
-	[ "$PSWAP" ] && swapon "/dev/$PSWAP"
+	export PSWAP
 	[ "$PLINUX" ] && {
 		echo 'Switching root'
 		# Stage Linux root
@@ -148,6 +148,9 @@ mount -ntusbfs none /proc/bus/usb
 # Mount FAT storage partitions
 mount_storage || echo '* No storage detected'
 unset storagedevs
+
+[ "$PSWAP" ] && swapon "/dev/$PSWAP"
+unset PSWAP 
 
 # Running /mnt/sdcard/opentom/start.sh script ...
 echo 'Starting ...'

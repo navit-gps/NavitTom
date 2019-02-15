@@ -1,5 +1,5 @@
---- ppp-2.4.7.original/pppd/Makefile.linux	2014-08-09 14:31:39.000000000 +0200
-+++ ppp-2.4.7/pppd/Makefile.linux	2016-11-26 01:24:02.193396298 +0100
+--- a/pppd/Makefile.linux
++++ b/pppd/Makefile.linux
 @@ -48,7 +48,7 @@ MPPE=y
  # Uncomment the next line to include support for PPP packet filtering.
  # This requires that the libpcap library and headers be installed
@@ -9,12 +9,12 @@
  
  # Uncomment the next line to enable multilink PPP (enabled by default)
  # Linux distributions: Please leave multilink ENABLED in your builds
-@@ -201,7 +201,7 @@ ifdef MAXOCTETS
-      CFLAGS += -DMAXOCTETS
- endif
- 
--INSTALL= install
-+INSTALL= install --strip-program=$(STRIP)
- 
- all: $(TARGETS)
- 
+@@ -208,7 +208,7 @@ all: $(TARGETS)
+ install: pppd
+ 	mkdir -p $(BINDIR) $(MANDIR)
+ 	$(EXTRAINSTALL)
+-	$(INSTALL) -s -c -m 555 pppd $(BINDIR)/pppd
++	$(INSTALL) -c -m 555 pppd $(BINDIR)/pppd
+ 	if chgrp pppusers $(BINDIR)/pppd 2>/dev/null; then \
+ 	  chmod o-rx,u+s $(BINDIR)/pppd; fi
+ 	$(INSTALL) -c -m 444 pppd.8 $(MANDIR)

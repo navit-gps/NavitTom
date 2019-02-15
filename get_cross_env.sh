@@ -43,7 +43,7 @@ export DOWNLOADS=Downloads
 #	export CONFIG_SYSROOT=$PREFIX
 #fi
 
-export PATH=$ARM_APPROOT/bin:/usr/bin:/bin:$ROOT/tools:$CROSS/bin
+export PATH=/usr/bin:/bin:$ROOT/tools:$CROSS/bin
 
 export CC="${T_ARCH}-gcc"
 export CXX="${T_ARCH}-g++"

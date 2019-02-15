@@ -1,17 +1,5 @@
---- a/navit/CMakeLists.txt	2018-11-18 21:59:14.000000000 +0000
-+++ b/navit/CMakeLists.txt	2019-01-01 13:54:11.000000000 +0000
-@@ -104,7 +104,7 @@ if(NOT MSVC)
- 	SET(NAVIT_LIBS ${NAVIT_LIBS} m)
- endif(NOT MSVC)
- target_link_libraries(${NAVIT_LIBNAME}  ${MODULES_NAME} ${NAVIT_SUPPORT_LIBS} fib ${NAVIT_LIBS} )
--set_target_properties(${NAVIT_LIBNAME} PROPERTIES COMPILE_DEFINITIONS "MODULE=navit;LIBDIR=\"${CMAKE_INSTALL_PREFIX}/${LIB_DIR}\";PREFIX=\"${CMAKE_INSTALL_PREFIX}\"")
-+set_target_properties(${NAVIT_LIBNAME} PROPERTIES COMPILE_DEFINITIONS "MODULE=navit;LIBDIR=\"/mnt/sdcard/opentom/lib\";PREFIX=\"/mnt/sdcard/opentom\"")
- if (DEFINED NAVIT_COMPILE_FLAGS)
- 	set_target_properties(${NAVIT_LIBNAME} PROPERTIES COMPILE_FLAGS "${NAVIT_COMPILE_FLAGS}")
- endif()
---- /dev/null
 +++ b/navit/xslt/tomtom_xl.xslt	2018-12-21 17:56:21.000000000 +0000
-@@ -0,0 +1,87 @@
+@@ -0,0 +1,88 @@
 +<?xml version="1.0"?>
 +<xsl:transform xmlns:xsl="http://www.w3.org/1999/XSL/Transform" xmlns:xi="http://www.w3.org/2001/XInclude" version="1.0">
 +
@@ -30,11 +18,13 @@
 +
 +	<xsl:template match="navit">
 +		<xsl:copy>
-+			<xsl:attribute name="zoom">32</xsl:attribute>
++			<xsl:attribute name="zoom">64</xsl:attribute>
 +			<xsl:attribute name="tracking">1</xsl:attribute>
 +			<xsl:attribute name="orientation">-1</xsl:attribute>
 +			<xsl:attribute name="autozoom_active">1</xsl:attribute>
 +			<xsl:attribute name="recent_dest">25</xsl:attribute>
++			<xsl:attribute name="pitch">20</xsl:attribute>
++			<xsl:attribute name="radius">20</xsl:attribute>
 +			<graphics type="sdl" w="480" h="272" bpp="16" frame="0" flags="1"/>
 +			<xsl:apply-templates select="gui[@type='internal']"/>
 +
@@ -79,7 +69,7 @@
 +			<xsl:copy-of select="navigation"/>
 +
 +			<xsl:comment>Use espeak.</xsl:comment>
-+			<speech type="cmdline" data="$NAVIT_PREFIX/bin/espeakdsp -v en '%s'"/>
++			<speech type="cmdline" data="espeakdsp -v en '%s'"/>
 +
 +			<mapset enabled="yes">
 +				<map type="binfile" enabled="yes" data="$NAVIT_SHAREDIR/maps/*.bin"/>
@@ -94,7 +84,6 @@
 +		<xsl:copy>
 +			<xsl:copy-of select="@*"/>
 +			<xsl:attribute name="fullscreen">1</xsl:attribute>
-+			<xsl:attribute name="pitch">35</xsl:attribute>
 +			<xsl:apply-templates/>
 +		</xsl:copy>
 +	</xsl:template>
@@ -151,7 +140,7 @@
  
  			<xsl:comment>Use espeak.</xsl:comment>
 -			<speech type="cmdline" data="/mnt/sdcard/navit/bin/espeakdsp -v en '%s'"/>
-+			<speech type="cmdline" data="$NAVIT_PREFIX/bin/espeakdsp -v en '%s'"/>
++			<speech type="cmdline" data="espeakdsp -v en '%s'"/>
  
  			<mapset enabled="yes">
  				<map type="binfile" enabled="yes" data="$NAVIT_SHAREDIR/maps/*.bin"/>

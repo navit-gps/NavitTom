@@ -83,11 +83,10 @@ $(TOMDIST)/bin/navit: Downloads/navit.zip
 	mkdir -p build
 	cd build && unzip ../Downloads/navit.zip && cd navit-* && { \
 		patch -p1 <../../patchs/navit_opentom.patch && \
-		sed -i 's| TOMTOM_SDK_DIR \S*| TOMTOM_SDK_DIR $(ARM_APPROOT)|' Toolchain/$(T_ARCH).cmake && \
 		mkdir -p build && cd build && \
-		cmake .. -DCMAKE_INSTALL_PREFIX=$(ARM_APPROOT) -DFREETYPE_INCLUDE_DIRS=$(ARM_APPROOT)/include/freetype2/ -Dsupport/gettext_intl=TRUE -DHAVE_API_TOMTOM=TRUE -DXSLTS=$(TTXSLTS) -DUSE_SVG=FALSE -Dsvg2png_scaling="0;16;20;24;32;48;64" -Dsvg2png_scaling_flag="-1;32" -Dsvg2png_scaling_nav="64;32" -DAVOID_FLOAT=TRUE -Dmap/mg=FALSE -DUSE_PLUGINS=0 -DCMAKE_TOOLCHAIN_FILE=../Toolchain/$(T_ARCH).cmake -DDISABLE_QT=ON -DSAMPLE_MAP=n -DBUILD_MAPTOOL=n >$(LOGS)/navit.log 2>&1 && \
+		cmake .. -DCMAKE_INSTALL_PREFIX=$(T_PREFIX) -DFREETYPE_INCLUDE_DIRS=$(ARM_APPROOT)/include/freetype2/ -Dsupport/gettext_intl=TRUE -DHAVE_API_TOMTOM=TRUE -DXSLTS=$(TTXSLTS) -DUSE_SVG=FALSE -Dsvg2png_scaling="0;16;20;24;32;48;64" -Dsvg2png_scaling_flag="-1;32" -Dsvg2png_scaling_nav="64;32" -DAVOID_FLOAT=TRUE -Dmap/mg=FALSE -DUSE_PLUGINS=0 -DCMAKE_TOOLCHAIN_FILE=../Toolchain/$(T_ARCH).cmake -DDISABLE_QT=ON -DSAMPLE_MAP=n -DBUILD_MAPTOOL=n >$(LOGS)/navit.log 2>&1 && \
 		make $(JOBS) >>$(LOGS)/navit.log 2>&1 && \
-		make install >>$(LOGS)/navit.log 2>&1 && \
+		make DESTDIR=$(ARM_APPROOT) install >>$(LOGS)/navit.log 2>&1 && \
 		cp -R $(ARM_APPROOT)/share/navit $(TOMDIST)/share/ && \
 		cd $(ARM_APPROOT) && find share/locale/ -name navit.mo -exec cp --parents '{}' $(TOMDIST) \; && \
 		cp $(ARM_APPROOT)/bin/navit $(TOMDIST)/bin/navit; \
@@ -144,7 +143,7 @@ $(TOMDIST)/bin/tuxchess:
 		rm images/board.gif; \
 	fi
 	cd build/tuxchess && { \
-		$(CC) -o $(TOMDIST)/bin/tuxchess -I$(ARM_SYSROOT)/usr/include/microwin *.c -lnano-X; \
+		$(CC) -o $(TOMDIST)/bin/tuxchess -I$(ARM_APPROOT)/include/microwin *.c -lnano-X; \
 		mkdir -p $(TOMDIST)/share/tuxchess && cp -R images $(TOMDIST)/share/tuxchess; \
 	}
 
@@ -226,7 +225,7 @@ $(TOMDIST)/bin/scummvm: Downloads/scummvm-1.6.0.tar.bz2
 	mkdir -p build
 	cd build && tar xf ../Downloads/scummvm-1.6.0.tar.bz2 && cd scummvm-1.6.0 && { \
 		patch -p1 <../../patchs/scummvm-1.6.0_opentom.patch; \
-		./configure --prefix=$(ARM_SYSROOT)/usr --host=$(T_ARCH) --disable-debug --default-dynamic --disable-scalers --disable-hq-scalers --disable-translation --disable-bink --with-sdl-prefix=$(ARM_SYSROOT)/usr/bin --disable-nasm --disable-readline --disable-libunity --disable-sndio --backend=sdl --enable-optimizations --disable-engine=kyra --disable-engine=hopkins >$(LOGS)/scummvm.log >$(LOGS)/scummvm.log; \
+		./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH) --disable-debug --default-dynamic --disable-scalers --disable-hq-scalers --disable-translation --disable-bink --with-sdl-prefix=$(ARM_APPROOT)/bin --disable-nasm --disable-readline --disable-libunity --disable-sndio --backend=sdl --enable-optimizations --disable-engine=kyra --disable-engine=hopkins >$(LOGS)/scummvm.log >$(LOGS)/scummvm.log; \
 		VERBOSE_BUILD=1 AS=arm-linux-as make $(JOBS) >$(LOGS)/scummvm.log 2>&1; \
 		make $(JOBS) >../../logs/scummvm.log && cp scummvm $(TOMDIST)/bin; \
 		mkdir -p $(TOMDIST)/share/scumm_games; \
@@ -278,7 +277,7 @@ $(TOMDIST)/bin/martian: Downloads/martian_source.tgz
 	mkdir -p build
 	cd build && tar xf ../Downloads/martian_source.tgz && cd Martian-Memory && { \
 		patch -p1 <../../patchs/Martian-Memory_opentom.patch; \
-		./configure --prefix=$(ARM_SYSROOT)/usr --build=i686-pc-linux-gnu --host=$(T_ARCH) --datadir=/mnt/sdcard/opentom/share >$(LOGS)/martian.log; \
+		./configure --prefix=$(ARM_APPROOT) --build=i686-pc-linux-gnu --host=$(T_ARCH) --datadir=/mnt/sdcard/opentom/share >$(LOGS)/martian.log; \
 		make $(JOBS) >$(LOGS)/martian.log && { \
 			cp src/martian $(TOMDIST)/bin/martian; \
 			mkdir -p $(TOMDIST)/share/Martian; \

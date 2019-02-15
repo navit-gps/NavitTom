@@ -10,9 +10,9 @@
 # Sanity checks
 
 ifeq ($(ROOT),)
-    $(error Please, do first : source get_cross_env.sh)
+	$(error Please, do first : source get_cross_env.sh)
 else
-    export $(ROOT)
+	export $(ROOT)
 endif
 
 # Speedup compilation (choose 1~2 x number of CPU/Core)
@@ -21,23 +21,19 @@ export JOBS=-j6
 BUSYBOX_VER=1.22.1
 
 export LOGS=$(ROOT)/logs
-export SOURCES=$(ROOT)/src
-export INITRAMFS_ROOT=$(ROOT)/initramfs
 export ARM_ROOT=arm-sysroot
-export ARM_SYSROOT=$(ROOT)/$(ARM_ROOT)
+ARM_SYSROOT=$(ROOT)/$(ARM_ROOT)
 export ARM_APPROOT=$(ARM_SYSROOT)/usr
-export CONFIGS=$(ROOT)/configs
+CONFIGS=$(ROOT)/configs
 export TOMDIST=$(ROOT)/opentom_dist
 export DOWNLOADS=Downloads
 
 export ARMGCC=gcc-3.3.4_glibc-2.3.2
-export CROSS=$(ROOT)/$(ARMGCC)
 export T_ARCH=arm-linux
-PREFIX=$(CROSS)/arm-linux/sys-root
-export CFLAGS=-mlittle-endian -march=armv5te -mtune=arm9tdmi -mshort-load-bytes -fno-omit-frame-pointer -fno-optimize-sibling-calls -mno-thumb-interwork -O2 -I$(ARM_SYSROOT)/usr/include -L$(ARM_SYSROOT)/usr/lib
-export CPPFLAGS=-march=armv5te -mtune=arm9tdmi -I$(PREFIX)/include -I$(PREFIX)/usr/include
-LDFLAGS=-L$(PREFIX)/lib -L$(ARM_SYSROOT)/usr/lib
-COMPILO=$(CROSS)/bin/$(T_ARCH)
+export T_PREFIX=/mnt/sdcard/opentom
+export CFLAGS=-mlittle-endian -march=armv5te -mtune=arm9tdmi -mshort-load-bytes -fno-omit-frame-pointer -fno-optimize-sibling-calls -mno-thumb-interwork -O2 -I$(ARM_APPROOT)/include -L$(ARM_APPROOT)/lib
+export CPPFLAGS=-march=armv5te -mtune=arm9tdmi -I$(ARM_SYSROOT)/include -I$(ARM_APPROOT)/include
+LDFLAGS=-L$(ARM_SYSROOT)/lib -L$(ARM_APPROOT)/lib
 
 export CC=$(T_ARCH)-gcc
 export CXX=$(T_ARCH)-g++
@@ -48,16 +44,6 @@ export AS=$(T_ARCH)-as
 export RANLIB=$(T_ARCH)-ranlib
 export STRIP=$(T_ARCH)-strip
 export OBJCOPY=$(T_ARCH)-objcopy
-
-export CROSS_COMPILE=$(T_ARCH)-
-export ARCH=arm
-
-# Pour les progs utilisant libtool et son problème de --sysroot, créer un script dans /usr/local/bin/$(COMPILO)-gcc
-# qui contient
-# #! /bin/bash
-# exec ${CROSS}/bin/${COMPILO}-gcc --sysroot=${PREFIX} $*
-#
-# Changer PATH=/usr/local/bin:$CROSS:/usr/bin:/bin
 
 base: tools ttsystem distrib
 	@echo
@@ -97,13 +83,14 @@ build/ttsystem: build/initramfs.cpio.gz kernel/arch/arm/boot/zImage
 
 build/initramfs.cpio.gz: $(CONFIGS)/initramfs_prepend kernel/arch/arm/boot/zImage initramfs/bin/busybox initramfs/etc/rc
 	cp $(CONFIGS)/initramfs_prepend build/cpio_list
-	rm -Rf $(INITRAMFS_ROOT)/lib/modules/*
-	cd kernel && INSTALL_MOD_PATH=$(INITRAMFS_ROOT)/ make modules_install
-	cd kernel && INSTALL_MOD_PATH=$(INITRAMFS_ROOT)/ make modules_install
+	rm -Rf initramfs/lib/modules/*
+	cd kernel && INSTALL_MOD_PATH=$(ROOT)/initramfs/ make modules_install
+	cd kernel && INSTALL_MOD_PATH=$(ROOT)/initramfs/ make modules_install
 	# 3rd pass for new sharedlibs
-	install_shared_libs.sh initramfs "$(ARM_ROOT)/lib $(ARM_ROOT)/usr/lib $(CROSS)/$(T_ARCH)/lib"
+	install_shared_libs.sh initramfs "$(ARM_ROOT)/lib" "$(ARM_ROOT)/usr/lib" "$(ARMGCC)/$(T_ARCH)/lib"
+	find initramfs -type f -exec $(STRIP) -g --strip-unneeded 2>/dev/null {} \;
 	chmod u+x kernel/scripts/gen_initramfs_list.sh
-	kernel/scripts/gen_initramfs_list.sh -u `id -u` -g `id -g` $(INITRAMFS_ROOT) >>build/cpio_list
+	kernel/scripts/gen_initramfs_list.sh -u "$$(id -u)" -g "$$(id -g)" initramfs >>build/cpio_list
 	kernel/usr/gen_init_cpio build/cpio_list | gzip -9 >build/initramfs.cpio.gz
 
 kernel/arch/arm/boot/zImage: $(ARM_ROOT) kernel/.config
@@ -117,32 +104,29 @@ kernel/.config: $(DOWNLOADS)/golinux-tt1114405.tar.gz
 	cp $(CONFIGS)/kernel_config.minix kernel/.config
 
 $(ARM_ROOT): $(ARMGCC)/lib
+	mkdir -p $(ARM_APPROOT)$(T_PREFIX); rm -r $(ARM_APPROOT)$(T_PREFIX); ln -sf ../.. $(ARM_APPROOT)/$(T_PREFIX)
 	mkdir -p $(ARM_ROOT)/bin
-	cd $(CROSS)/$(T_ARCH)/libc/ && cp -R etc sbin lib usr $(ARM_SYSROOT)/
-	#cd $(ARM_ROOT) && find . ! -type d -exec chmod a-w {} \;
+	for d in etc sbin lib usr; do cp -R $(ARMGCC)/$(T_ARCH)/libc/$$d $(ARM_ROOT)/; done
 	mkdir -p $(ARM_ROOT)/usr/include
 	mkdir -p $(ARM_ROOT)/usr/man/man1
 	chmod u+w $(ARM_ROOT)/usr/include/asm/*
 
 $(ARMGCC)/lib: $(DOWNLOADS)/toolchain_redhat_gcc-3.3.4_glibc-2.3.2-20060131a.tar.gz
-	test -d $(ARMGCC)/lib || { \
-		tar xf $(DOWNLOADS)/toolchain_redhat_gcc-3.3.4_glibc-2.3.2-20060131a.tar.gz; \
-		cd $(ARMGCC)/arm-linux/ && { \
+	[ -d $(ARMGCC)/lib ] || { \
+		tar --exclude=freetype --exclude=libfreetype* -xf $(DOWNLOADS)/toolchain_redhat_gcc-3.3.4_glibc-2.3.2-20060131a.tar.gz; \
+		cd $(ARMGCC)/bin && cat $(CONFIGS)/install_links.txt | while read f; do ln -s $$f; done; \
+		cd ../$(T_ARCH)/ && { \
 			mv sys-root sys-root.orig; \
 			ln -s sys-root.orig libc; \
-			ln -s $(ARM_SYSROOT)/ sys-root; \
+			ln -rs $(ARM_SYSROOT) sys-root; \
 		}; \
-		cd $(ROOT)/$(ARMGCC)/bin && cat $(CONFIGS)/install_links.txt | while read file; do ln -s $$file; done; \
 	}
 
 initramfs/etc/rc:
 	mkdir -p initramfs/lib
 	cp -Rf src/initramfs_skel/* initramfs
-	cp $(ARM_SYSROOT)/lib/libnss_dns.so.2 $(ARM_SYSROOT)/lib/libnss_files.so.2 initramfs/lib
-	cd initramfs/lib && find . -type f -exec $(CROSS)/bin/$(STRIP) 2>/dev/null {} \;
-	install_shared_libs.sh initramfs "$(ARM_SYSROOT)/lib $(ARM_SYSROOT)/usr/lib $(CROSS)/$(T_ARCH)/lib"
-	# 2nd pass for new shared libs
-	install_shared_libs.sh initramfs "$(ARM_SYSROOT)/lib $(ARM_SYSROOT)/usr/lib $(CROSS)/../arm-linux/lib"
+	cp $(ARM_ROOT)/lib/libnss_dns.so.2 $(ARM_ROOT)/lib/libnss_files.so.2 initramfs/lib
+	install_shared_libs.sh initramfs "$(ARM_ROOT)/lib" "$(ARM_APPROOT)/lib" "$(ARMGCC)/$(T_ARCH)/lib"
 	cp $(CONFIGS)/etc_rc_file initramfs/etc/rc
 	cd initramfs && ln -s etc/rc init
 
@@ -182,7 +166,14 @@ $(ARM_ROOT)/usr/include/microwin/nano-X.h: $(ARM_ROOT)/usr/include/zlib.h $(ARM_
 	cd build/microwin/src && { \
 		make >$(LOGS)/nanox.log 2>&1 && \
 		make install >>$(LOGS)/nanox.log 2>&1 && \
-		cp bin/convb* $(ARM_APPROOT)/bin; \
+		cp bin/convb* $(ROOT)/tools; \
+	}
+	cd build/microwin/src/fonts/truetype && { \
+		mkfontscale && \
+		grep -Ee '-iso8859-1$$' fonts.scale | tee fonts.tmp | { wc -l && cat fonts.tmp; } >fonts.dir && \
+		rm fonts.scale fonts.tmp && \
+		sed -Ee '1d;s~^[^-]+ (.*)$$~\1*~;h;s~-[^-]+(-.*--).*$$~-*\1*~;s~ ~~g;s~arial~helvetica~;s~(courier|times)[^-]*-~\1-~;G;s~\n~ ~;s~^(-([^-]+-){3})(i|o)(-.*)$$~\1i\4\n\1o\4~' \
+		fonts.dir | awk '!seen[$$1]++' >fonts.alias; \
 	}
 
 build/microwin/src: $(DOWNLOADS)/microwin_9ffcd17.tgz
@@ -232,7 +223,7 @@ sdl: $(ARM_ROOT)/usr/include/SDL/SDL.h
 $(ARM_ROOT)/usr/include/SDL/SDL.h: $(DOWNLOADS)/SDL-1.2.15.tar.gz $(ARM_ROOT)/usr/include/microwin/nano-X.h
 	cd build && tar xf ../Downloads/SDL-1.2.15.tar.gz && cd SDL-1.2.15 && { \
 		patch -p1 <../../patchs/SDL-1.2.1_opentom.patch && \
-		./configure --prefix=$(ARM_APPROOT) --host=arm-linux --disable-joystick --disable-cdrom --disable-alsa --disable-esd --disable-pulseaudio --disable-arts --disable-nas --disable-diskaudio --disable-mintaudio --disable-nasm --disable-altivec --disable-ipod --disable-video-x11 --disable-dga --disable-video-x11-vm --disable-video-x11-xv --disable-video-x11-xme --disable-video-x11-xrandr --disable-video-photon --disable-video-carbon --disable-cocoa --disable-ps2gs  --disable-ps3  --disable-ggi  --disable-svga  --disable-vgl  --disable-wscons --disable-video-aalib --disable-video-directfb --disable-video-caca --disable-video-qtopia --disable-video-picogui --disable-video-xbios --disable-video-gem --disable-video-opengl --disable-osmesa-shared --disable-screensaver --disable-directx --disable-atari-ldg  --enable-video-nanox --enable-nanox-share-memory --disable-video-fbcon >$(LOGS)/sdl.log; \
+		./configure --prefix=$(ARM_APPROOT) --host=arm-linux --disable-joystick --disable-cdrom --disable-alsa --disable-esd --disable-pulseaudio --disable-arts --disable-nas --disable-diskaudio --disable-mintaudio --disable-nasm --disable-altivec --disable-ipod --disable-video-x11 --disable-dga --disable-video-x11-vm --disable-video-x11-xv --disable-video-x11-xme --disable-video-x11-xrandr --disable-video-photon --disable-video-carbon --disable-cocoa --disable-ps2gs --disable-ps3 --disable-ggi --disable-svga --disable-vgl --disable-wscons --disable-video-aalib --disable-video-directfb --disable-video-caca --disable-video-qtopia --disable-video-picogui --disable-video-xbios --disable-video-gem --disable-video-opengl --disable-osmesa-shared --disable-screensaver --disable-directx --disable-atari-ldg --enable-video-nanox --enable-nanox-share-memory --disable-video-fbcon >$(LOGS)/sdl.log; \
 		make $(JOBS) install >>$(LOGS)/sdl.log 2>&1 ; \
 	}
 
@@ -265,11 +256,11 @@ $(ARM_ROOT)/usr/include/SDL/SDL_image.h: $(DOWNLOADS)/SDL_image-1.2.12.tar.gz $(
 sdl_ttf: $(ARM_ROOT)/usr/include/SDL/SDL_ttf.h
 $(ARM_ROOT)/usr/include/SDL/SDL_ttf.h: $(DOWNLOADS)/SDL_ttf-2.0.11.tar.gz
 	cd build && { \
-                tar xf ../Downloads/SDL_ttf-2.0.11.tar.gz && cd SDL_ttf* && { \
-                        ./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH) >$(LOGS)/SDL_ttf.log; \
-                        make $(JOBS) install >>$(LOGS)/SDL_ttf.log; \
-                } \
-        }
+		tar xf ../Downloads/SDL_ttf-2.0.11.tar.gz && cd SDL_ttf* && { \
+		./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH) >$(LOGS)/SDL_ttf.log; \
+		make $(JOBS) install >>$(LOGS)/SDL_ttf.log; \
+		} \
+	}
 
 sdl_net: $(ARM_ROOT)/usr/include/SDL/SDL_net.h
 $(ARM_ROOT)/usr/include/SDL/SDL_net.h:
@@ -319,7 +310,7 @@ $(ARM_ROOT)/usr/include/X11/X.h: build/nxlib $(ARM_ROOT)/usr/include/microwin/na
 	cd build/nxlib && { \
 		make $(JOBS) >$(LOGS)/nxlib.log 2>&1 && \
 		make $(JOBS) install >>$(LOGS)/nxlib.log 2>&1 && \
-                cp -R X11 /usr/include/X11/cursorfont.h $(ARM_SYSROOT)/usr/include; \
+		cp -R X11 /usr/include/X11/cursorfont.h $(ARM_APPROOT)/include; \
 		cat $(CONFIGS)/x11.pc | sed 's#ARM_APPROOT#$(ARM_APPROOT)#' >$(ARM_APPROOT)/lib/pkgconfig/x11.pc; \
 		cat $(CONFIGS)/xext.pc | sed 's#ARM_APPROOT#$(ARM_APPROOT)#' >$(ARM_APPROOT)/lib/pkgconfig/xext.pc; \
 	}
@@ -328,12 +319,12 @@ $(ARM_ROOT)/usr/include/X11/X.h: build/nxlib $(ARM_ROOT)/usr/include/microwin/na
 
 build/nxlib: $(DOWNLOADS)/nxlib_7adaf0e.tgz
 	cd build && { \
-                if ! test -d nxlib; then \
-                        tar xf ../Downloads/nxlib_7adaf0e.tgz; \
-                else \
-                        touch nxlib; \
+		if ! test -d nxlib; then \
+			tar xf ../Downloads/nxlib_7adaf0e.tgz; \
+		else \
+			touch nxlib; \
 		fi; \
-                cd nxlib && patch -p1 <$(ROOT)/patchs/nxlib_git_opentom.patch; \
+			cd nxlib && patch -p1 <$(ROOT)/patchs/nxlib_git_opentom.patch; \
 		cp -Rf /usr/include/X11 .; \
 	}
 
@@ -344,15 +335,15 @@ $(ARM_ROOT)/usr/include/FL/Fl.H: $(DOWNLOADS)/fltk-1.3.2-source.tar.gz $(ARM_ROO
 		echo You need Fluid on you system to build FLTK\(arm\); \
 		false; \
 	fi
-	cp /usr/include/X11/Xlocale.h /usr/include/X11/cursorfont.h /usr/include/X11/Xmd.h $(ARM_SYSROOT)/usr/include/X11/
+	cp /usr/include/X11/Xlocale.h /usr/include/X11/cursorfont.h /usr/include/X11/Xmd.h $(ARM_APPROOT)/include/X11/
 	cd build && { \
 		if ! test -d fltk-1.3.2*; then \
 			tar xf ../Downloads/fltk-1.3.2-source.tar.gz && cd fltk-1.3.2 && { \
 				patch -p1 <../../patchs/fltk-1.3.2_opentom_nxlib.patch; \
 				mogrify -resize 50% test/pixmaps/black*.xbm test/pixmaps/white*.xbm; \
-				./configure --prefix=$(ARM_SYSROOT)/usr --host=arm-linux --x-includes=$(ARM_SYSROOT)/usr/include \
-					--x-libraries=$(ARM_SYSROOT)/usr/lib --enable-shared --disable-gl --disable-xdbe \
-					--disable-xft --disable-xinerama --disable-largefile --with-x >$(LOGS)/fltk13.log 2>&1; \
+				./configure --prefix=$(ARM_APPROOT) --host=arm-linux --x-includes=$(ARM_APPROOT)/include \
+					--x-libraries=$(ARM_APPROOT)/lib --enable-shared --disable-gl --disable-xdbe \
+					--disable-xft --disable-xinerama --disable-largefile --with-x --enable-debug >$(LOGS)/fltk13.log 2>&1; \
 				sed 's/-lXext//' <makeinclude >_makeinclude; mv _makeinclude makeinclude; \
 				sed 's_\.\./fluid/fluid$$(EXEEXT).-c_fluid -c_' <test/Makefile >tmp.txt; mv tmp.txt test/Makefile; \
 			}; \
@@ -405,18 +396,18 @@ $(ARM_ROOT)/usr/include/curl/curl.h: $(DOWNLOADS)/curl-7.51.0.tar.gz
 libid3tag: $(ARM_ROOT)/usr/include/id3tag.h
 $(ARM_ROOT)/usr/include/id3tag.h: $(DOWNLOADS)/libid3tag-0.15.1b.tar.gz
 	cd build && { \
-                tar xf ../Downloads/libid3tag-0.15.1b.tar.gz && cd libid3tag-0.15.1b && { \
+		tar xf ../Downloads/libid3tag-0.15.1b.tar.gz && cd libid3tag-0.15.1b && { \
 			./configure --prefix=$(ARM_APPROOT) --host=arm-linux >$(LOGS)/libid3tag.log; \
-                        make $(JOBS) install >>$(LOGS)/libid3tag.log; \
-                } \
-        }
+			make $(JOBS) install >>$(LOGS)/libid3tag.log; \
+		} \
+	}
 
 expat: $(ARM_ROOT)/usr/include/expat.h
 $(ARM_ROOT)/usr/include/expat.h: $(DOWNLOADS)/expat-2.1.0.tar.gz
 	cd build && tar xf ../Downloads/expat-2.1.0.tar.gz && cd expat-2.1.0 && { \
-                ./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH); \
-                make $(JOBS) install >/$(LOGS)/libexpat.log 2>&1; \
-        }
+		./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH); \
+		make $(JOBS) install >/$(LOGS)/libexpat.log 2>&1; \
+	}
 
 espeak: $(TOMDIST)/bin/espeak
 $(TOMDIST)/bin/espeak: Downloads/pa_stable_v19_20140130.tgz Downloads/espeak-1.48.02-source.zip
@@ -443,7 +434,7 @@ $(ARM_ROOT)/usr/include/openssl/opensslconf.h: Downloads/openssl-1.0.1u.tar.gz
 	cd build && tar xf ../Downloads/openssl-1.0.1u.tar.gz && cd openssl-1.0.1u && { \
 		CC=gcc ./Configure linux-armv4 shared --prefix=$(ARM_APPROOT) >$(LOGS)/ssl.log && \
 		make >>$(LOGS)/ssl.log && \
-		INSTALL_PREFIX=/mnt/sdcard/opentom make install_sw >>$(LOGS)/ssl.log; \
+		make install_sw >>$(LOGS)/ssl.log; \
 	}
 
 gtk: $(ARM_ROOT)/usr/include/gtk-1.2/gtk/gtk.h
@@ -459,8 +450,19 @@ gtk: $(ARM_ROOT)/usr/include/gtk-1.2/gtk/gtk.h
 # Apps and Tools
 ################
 
-gdb: $(ARM_ROOT)/usr/bin/gdb
-$(ARM_ROOT)/usr/bin/gdb: quick-gdb-7.1
+gdb: $(ARM_ROOT)/usr/bin/gdb $(ARMGCC)/bin/$(T_ARCH)-gdb
+$(ARM_ROOT)/usr/bin/gdb $(ARMGCC)/bin/$(T_ARCH)-gdb:
+	make quick-gdb-7.1
+	$(STRIP) -s $(ARM_ROOT)/usr/bin/gdb* $(ARM_ROOT)/usr/bin/run
+	cp -f $(ARM_ROOT)/usr/bin/gdbserver $(TOMDIST)/bin
+	cd build/gdb-7.1 && { \
+		make distclean && \
+		CC= CXX= LD= NM= AR= AS= RANLIB= OBJCOPY= STRIP= CFLAGS=-Wno-error CPPFLAGS= && \
+		./configure --prefix=$(ROOT)/$(ARMGCC) --target=$(T_ARCH) >>$(LOGS)/gdb-7.1.log && \
+		make >>$(LOGS)/gdb-7.1.log && \
+		make $(JOBS) install >>$(LOGS)/gdb-7.1.log; \
+	}
+	strip -s $(ARMGCC)/bin/$(T_ARCH)-gdb* $(ARMGCC)/bin/$(T_ARCH)-run 2>/dev/null
 
 tools:
 	make -C src/tools install
@@ -471,14 +473,16 @@ apps: $(TOMDIST) tool_apps dropbear
 	make -C applications install
 
 $(TOMDIST): nano-X
-	mkdir -p $(TOMDIST)
 	mkdir -p $(TOMDIST)/logs
 	cp -R src/opentom_skel/* $(TOMDIST)/
 	cp $(ARM_APPROOT)/bin/nano-X $(TOMDIST)/bin
 	cd build/microwin/src/bin && cp nanowm setportrait nxeyes nxclock nxroach nxmag nxview slider vnc $(TOMDIST)/bin
 	mkdir -p $(TOMDIST)/lib/ts/
-	cp -R $(ARM_SYSROOT)/usr/lib/ts/*.so $(TOMDIST)/lib/ts/
-	cp $(ARM_SYSROOT)/usr/bin/ts_calibrate $(ARM_SYSROOT)/usr/bin/ts_test  $(TOMDIST)/bin
+	cp -R $(ARM_APPROOT)/lib/ts/*.so $(TOMDIST)/lib/ts/
+	cp $(ARM_APPROOT)/bin/ts_calibrate $(ARM_APPROOT)/bin/ts_test $(TOMDIST)/bin
+	cd build/microwin/src/fonts/truetype && { \
+		for f in fonts.dir fonts.alias $$(cut -d' ' -sf1 fonts.dir); do cp -f $$f $(TOMDIST)/fonts/; done; \
+	}
 
 tool_apps: csrinit bluez-utils pppd
 
@@ -515,10 +519,10 @@ $(TOMDIST)/bin/pppd: $(DOWNLOADS)/ppp-2.4.7.tar.gz
 quick-%:
 	make Downloads/$(@:quick-%=%)
 	cd build && { tar xf ../$(DOWNLOADS)/$(@:quick-%=%)* || unzip ../$(DOWNLOADS)/$(@:quick-%=%)*; } && cd $(@:quick-%=%)* && { \
-		./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH) $(CONF_ARGS) >$(LOGS)/$@.log && \
+		./configure --prefix=$(ARM_APPROOT) --host=$(T_ARCH) $(CONF_ARGS) >$(LOGS)/$(@:quick-%=%).log && \
 		find . -name Makefile | while read f; do sed 's/-Wextra//' <$$f >/tmp/tmp$$$$; mv /tmp/tmp$$$$ $$f; done; \
-		make >>$(LOGS)/$@.log && \
-		make $(JOBS) install >>$(LOGS)/$@.log && { \
+		make >>$(LOGS)/$(@:quick-%=%).log && \
+		make $(JOBS) install >>$(LOGS)/$(@:quick-%=%).log && { \
 			echo "#####"; \
 			echo "# Package \"$(@:quick-%=%)\" have been successfully installed in $(ARM_APPROOT)"; \
 			echo "#####"; \
@@ -546,11 +550,8 @@ quicka-%:
 
 verif_dist:
 	rm -f $(TOMDIST)/lib/* || echo ok
-	libcount=0 ; while [ $$libcount -lt `find $(TOMDIST)/lib | wc -l` ] ; do \
-		libcount=`find $(TOMDIST)/lib | wc -l` ; \
-		install_shared_libs.sh $(TOMDIST) $(ARM_SYSROOT)/usr/lib "$(ARM_SYSROOT)/lib $(CROSS)/$(T_ARCH)/lib" ; \
-	done
-	cd $(TOMDIST) && find . -type f -exec $(STRIP) 2>/dev/null {} \;
+	install_shared_libs.sh "$(TOMDIST)" "$(ARM_APPROOT)/lib" "$(ARM_ROOT)/lib" "$(ARMGCC)/$(T_ARCH)/lib" ; \
+	find $(TOMDIST) -type f -exec $(STRIP) -g --strip-unneeded 2>/dev/null {} \;
 
 
 extract_initramfs:
@@ -573,4 +574,4 @@ help:
 	@echo "Usage: make <target>"
 	@echo ""
 	@echo "Where <target> can be :"
-	@echo `grep : Makefile  | cut -f1 -d: | grep -v \( | grep -v build | grep -v \# | grep -v kernel | grep -v echo | grep -v initramfs | xargs`
+	@echo `grep : Makefile | cut -f1 -d: | grep -v \( | grep -v build | grep -v \# | grep -v kernel | grep -v echo | grep -v initramfs | xargs`

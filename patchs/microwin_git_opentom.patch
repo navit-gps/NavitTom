@@ -10,15 +10,6 @@ diff -rupN microwin/src/config microwin_opentom/src/config
  BIGENDIAN                = N
  NATIVETOOLSPREFIX        = 
  ARMTOOLSPREFIX           = arm-linux-
-@@ -50,7 +50,7 @@ PSPTOOLSPREFIX           = psp-
- #
- ####################################################################
- OPTIMIZE                 = Y
--DEBUG                    = Y
-+DEBUG                    = N
- VERBOSE                  = N
- THREADSAFE               = Y
- GPROF                    = N
 @@ -80,7 +80,7 @@ NANOXDEMO                = Y
  #
  ####################################################################
@@ -238,3 +229,14 @@ diff -rupN microwin/src/Makefile.rules microwin_opentom/src/Makefile.rules
  dirs := $(filter-out $(MW_DIR_SRC)/$(MW_DIR_RELATIVE)demos/,$(dirs))
  dirs := $(filter-out $(MW_DIR_SRC)/$(MW_DIR_RELATIVE)ecos/,$(dirs))
  dirs := $(filter-out $(MW_DIR_SRC)/$(MW_DIR_RELATIVE)rtems/,$(dirs))
+--- a/src/engine/font_freetype2.c
++++ b/src/engine/font_freetype2.c
+@@ -55,7 +55,7 @@ void winfillrect(PSD psd, int x, int y,
+ /* **************************************************************************/
+ /* FreeType 2.x                                                             */
+ /* **************************************************************************/
+-#include <ft2build.h>
++#include <freetype/config/ftheader.h>
+ #include FT_FREETYPE_H
+ #include FT_TRIGONOMETRY_H
+ #include FT_GLYPH_H
