@@ -1,41 +1,26 @@
 #! /bin/bash
 
-if [ -z "$1" ]; then
-	echo Usage: $0 <arm-sysroot> \"lib_path1 lib_path2 ...\"
-	exit
-fi
+[ "$2" ] || ! echo "Usage: $0 <arm-sysroot> lib_path1 ..." || exit 1
 
-initramfs_dir=$1
+armsysroot="$1"
 shift
-paths=$*
+paths="$@"
 
-typeset -i found
+find_needed () { "${T_ARCH}-readelf" -d "$1" | sed -Ene '/NEEDED/s~^.*\[(.*)\].*$~\1~p'; } 2>/dev/null
 
-find $initramfs_dir -type f -exec ${T_ARCH}-readelf -d {} 2>/dev/null \; | grep NEEDED | cut -f2 -d[ | cut -f1 -d] | sort | uniq | while read lib
-do
+is_needed () { find_needed "$1" | grep -q "$2"; }
 
-	if [ -f $initramfs_dir/lib/$lib ]; then
-		echo $lib is allready installed.
-		continue
-	fi
-
-	found=0
-	for p in $paths
-	do
-		if [ -f $p/$lib ];
-		then
-			found=1
-			echo found $p/$lib
-			cp -u $p/$lib $initramfs_dir/lib/
-			${CROSS}/bin/${STRIP} $initramfs_dir/lib/$lib
-			break
-		fi
+cntold=-1
+cnt=0
+while [ "$cnt" -gt "$cntold" ]; do
+	cntold="$cnt"
+	find "$armsysroot" -type f | while read f; do find_needed "$f"; done | awk '!seen[$0]++' | while read l; do
+		[ -f "$armsysroot/lib/$l" ] || [ -f "initramfs/lib/$l" ] && echo "$l" is already installed && continue
+		found=''
+		for p in $paths; do
+			[ -f "$p/$l" ] && found=1 && echo found "$p/$l" && cp "$p/$l" "$armsysroot/lib/" && break
+		done
+		[ "$found" ] || ! echo WARNING - cannot find "$l" used in: || find "$armsysroot" -type f | while read f; do is_needed "$f" "$l" && echo " $f"; done
 	done
-
-	if [[ $found -eq 0 ]]; then
-		echo WARNING: Can\'t find : $lib for this files :
-		find $initramfs_dir -type f -exec is_use_lib.sh {} $lib \; -print
-	fi
-
+	cnt="$(ls -1 "$armsysroot/lib" | wc -l)"
 done
-

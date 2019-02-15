@@ -11,7 +11,7 @@ clean:
 	rm -f $(TOOLS)
 
 %: %.c
-	$(CC) -o $@ -I$(ROOT)/kernel/include $@.c -lnano-X
+	$(CC) -g -ggdb -o $@ -I$(ROOT)/kernel/include $@.c -lnano-X
 
 %: %.cxx
-	$(CXX) -o $@ $@.cxx -lfltk -lfltk_images
+	$(CXX) -g -ggdb -o $@ $@.cxx -lfltk -lfltk_images
